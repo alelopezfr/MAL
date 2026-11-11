@@ -25,7 +25,11 @@ examen-p2-125053184/
 │   └── requirements.txt   # Dependencias de Python
 ├── scripts/
 │   └── cargar_resultados.py # Carga masiva de part-00000 a PostgreSQL
-└── evidencias/            # Capturas y logs de ejecución
+└── evidencias/            # Capturas de pantalla
+    ├── hadoop_version.png
+    ├── ssh_conexion.png
+    ├── salida_job.png
+    └── api_respuesta.png
 ```
 
 ---
@@ -48,11 +52,10 @@ examen-p2-125053184/
    cp .env.example .env
    ```
 
-3. **Generar el dataset local (si no existe):**
+3. **Generar el dataset local:**
    ```bash
    python generar_dataset.py 125053184
    ```
-   *Nota: El dataset `ventas_125053184.csv` (~400 MB) debe colocarse o moverse a la ruta `data/output/` para ser consumido.*
 
 4. **Levantar todo el entorno con un solo comando:**
    ```bash
@@ -67,46 +70,62 @@ examen-p2-125053184/
 
 ---
 
-## 3. Endpoints de la API (FastAPI)
+## 3. Evidencias de Funcionamiento
 
-Una vez desplegada, la API está disponible en `http://localhost:8000`:
+### A1. Validación de Hadoop Version
+![Hadoop Version](evidencias/hadoop_version.png)
 
-* **`GET /resultados`**: Consulta todos los registros de la tabla datamart (`metodo_pago`, `dia_semana`, `unidades_vendidas`).
-* **`GET /resultados/{metodo_pago}`**: Filtra los registros por un método de pago específico (ej. `/resultados/Tarjeta`).
-* **`GET /resultados/{metodo_pago}/{dia_semana}`**: Filtra específicamente por combinación (ej. `/resultados/Tarjeta/Martes`).
-* **`POST /resultados`**: Endpoint de escritura del CRUD para agregar o actualizar registros.
-* **Documentación Swagger UI**: `http://localhost:8000/docs`
+### B. Conexión SSH sin Contraseña
+![SSH sin contraseña](evidencias/ssh_conexion.png)
+
+### C1. Salida del Job MapReduce (`part-00000`)
+![Salida MapReduce](evidencias/salida_job.png)
+
+### D. Respuesta de la API (Endpoints GET y POST)
+![Respuesta API](evidencias/api_respuesta.png)
 
 ---
 
-## 4. Comparativa de Rendimiento (MapReduce vs Secuencial)
+## 4. Endpoints de la API (FastAPI)
+
+Una vez desplegada, la API está disponible en `http://localhost:8000`:
+
+* **`GET /resultados`**: Consulta todos los registros (`metodo_pago`, `dia_semana`, `unidades_vendidas`).
+* **`GET /resultados/{metodo_pago}`**: Filtra por método de pago (ej. `/resultados/Tarjeta`).
+* **`GET /resultados/{metodo_pago}/{dia_semana}`**: Filtra combinación específica (ej. `/resultados/Tarjeta/Martes`).
+* **`POST /resultados`**: Endpoint de escritura para insertar/actualizar registros.
+* **Swagger UI**: `http://localhost:8000/docs`
+
+---
+
+## 5. Comparativa de Rendimiento (Tiempos Medidos)
 
 - **Hadoop MapReduce Streaming:** ~32.4 segundos  
 - **Script Secuencial en Python:** ~18.2 segundos  
 
 ### Explicación
-Para un dataset de 400 MB (5 millones de registros), el script secuencial es más rápido debido al costo de sobrecarga (*overhead*) que implica Hadoop MapReduce al inicializar la Máquina Virtual de Java (JVM), distribuir los procesos de Map y Reduce, gestionar operaciones de I/O en disco para el ordenamiento (*shuffle & sort*) y coordinar la comunicación entre procesos. MapReduce comienza a superar el rendimiento del enfoque secuencial a partir de archivos en el orden de los *gigabytes* o *terabytes* procesados en clústeres multinodo, donde el paralelismo real justifica la sobrecarga de orquestación.
+Para un dataset de 400 MB (5 millones de registros), el script secuencial en Python resulta más rápido debido a la sobrecarga (*overhead*) implícita en Hadoop MapReduce. Esta sobrecarga abarca la inicialización de la JVM, la asignación de contenedores, la distribución de procesos de Map y Reduce y las operaciones de lectura/escritura en disco durante la fase de *Shuffle & Sort*. MapReduce demuestra superioridad a partir de volúmenes en la escala de gigabytes o terabytes procesados en clústeres distribuídos.
 
 ---
 
-## 5. Parte E - Cuestionario Teórico
+## 6. Parte E - Cuestionario Teórico
 
 1. **Diferencia entre modos Standalone, Pseudo-distribuido y Totalmente distribuido:**  
-   - **Standalone:** Ejecuta Hadoop en un solo proceso Java sin demonios corriendo ni HDFS (usa el sistema de archivos local).  
-   - **Pseudo-distribuido:** Ejecuta todos los demonios de Hadoop (NameNode, DataNode, ResourceManager, NodeManager) como procesos independientes en una sola máquina; **sí utiliza HDFS**.  
-   - **Totalmente distribuido:** Distribuye los demonios y el almacenamiento entre múltiples nodos físicos/virtuales en un clúster; **utiliza HDFS de forma distribuida**.
+   - **Standalone:** Ejecuta Hadoop en un único proceso Java local sin demonios activos ni HDFS.  
+   - **Pseudo-distribuido:** Ejecuta todos los demonios (NameNode, DataNode, ResourceManager) como procesos independientes en una sola máquina; **utiliza HDFS**.  
+   - **Totalmente distribuido:** Distribuye los demonios y el almacenamiento entre un conjunto de nodos físicos o virtuales en clúster; **utiliza HDFS distribuido**.
 
-2. **¿Por qué el dataset se monta como volumen y no con `COPY` en el Dockerfile?**  
-   - **Razón 1:** Evita inflar innecesariamente el tamaño de la imagen Docker en 400 MB+, haciendo la construcción y distribución de la imagen lenta e ineficiente.  
-   - **Razón 2:** Permite la modificación o regeneración del dataset dinámicamente en el host sin necesidad de reconstruir la imagen de Docker cada vez.
+2. **¿Por qué el dataset se monta como volumen y no con `COPY`?**  
+   - **Razón 1:** Evita incrementar el tamaño de la imagen Docker en más de 400 MB, agilizando su construcción y distribución.  
+   - **Razón 2:** Permite modificar o actualizar los datos de origen dinámicamente desde el host sin necesidad de reconstruir la imagen de Docker.
 
 3. **Diferencia entre `docker compose down` y `docker compose down -v`:**  
-   - `docker compose down`: Detiene y elimina los contenedores, redes y elementos creados, pero **mantiene los volúmenes nombrados** (los datos en la base de datos persisten).  
-   - `docker compose down -v`: Detiene todo y **elimina también los volúmenes nombrados**, borrando de forma permanente la base de datos y toda la información almacenada.
+   - `docker compose down`: Elimina contenedores y redes, **preservando los volúmenes nombrados** (los datos en la BD persisten).  
+   - `docker compose down -v`: Elimina contenedores, redes y **destruye los volúmenes nombrados**, borrando la información en la base de datos de manera definitiva.
 
 4. **¿Por qué MapReduce no siempre es más rápido que un script secuencial en 400 MB?**  
-   - Por la sobrecarga (*overhead*) de inicialización del framework MapReduce (arranque de JVM, división de splits, fase de *Shuffle & Sort* escribiendo a disco). En volúmenes de datos pequeños (como 400 MB), la memoria RAM local y la ejecución secuencial leen y procesan el archivo directamente sin esa sobrecarga. Conviene usarlo cuando el volumen supera la capacidad de memoria de una sola máquina (múltiples GBs/TBs) y se requiere un clúster distribuido.
+   - Por el costo de inicialización y orquestación del framework (inicio de JVM, división de splits, fase de *Shuffle & Sort* en disco). En volúmenes moderados (400 MB), la lectura secuencial directa en RAM procesa las líneas sin esa sobrecarga administrativa.
 
 5. **Diferencias entre `CMD` vs `ENTRYPOINT` y `COPY` vs `ADD`:**  
-   - **CMD vs ENTRYPOINT:** `ENTRYPOINT` establece el ejecutable principal e inmutable que se correrá al arrancar el contenedor, mientras que `CMD` provee los argumentos por defecto (o un comando sobreescribible desde la línea de comandos de Docker).  
-   - **COPY vs ADD:** `COPY` copia archivos/directorios locales directamente al contenedor. `ADD` hace lo mismo pero además soporta la descarga de URLs remotas y la extracción automática de archivos comprimidos (`.tar.gz`, `.zip`).
+   - **CMD vs ENTRYPOINT:** `ENTRYPOINT` fija el comando ejecutable base del contenedor, mientras que `CMD` provee argumentos por defecto que pueden ser anulados desde la CLI.  
+   - **COPY vs ADD:** `COPY` transfiere archivos locales al contenedor. `ADD` añade capacidad para extraer automáticamente archivos comprimidos (`.tar.gz`, `.zip`) y descargar desde URLs remotas.
